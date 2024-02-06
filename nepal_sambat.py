@@ -1,4 +1,4 @@
-# fmt:off
+# pylint:disable-all
 import math
 import datetime
 import ephem
@@ -21,18 +21,18 @@ gatech.lat = LATITUDE
 gatech.elevation = 0
 
 
-def j2ts(j: float | int) -> float:
+def j2ts(j: float) -> float:
     """convert julian date to timestamp"""
     return (j - 2440587.5) * 86400
 
 
-def ts2j(ts: float | int) -> float:
+def ts2j(ts: float) -> float:
     "convert timestamp to julian date"
     return ts / 86400.0 + 2440587.5
 
 
 def _get_sun_time(dt:_TDateTime) -> tuple[_TDateTime, _TDateTime]:
-
+    """return sunrise/sunset time in Kathmandu"""
     JULIAN_DATE = ts2j(dt.timestamp())
     DAYS_SINCE_EPOCH = round(JULIAN_DATE - (2451545.0 + 0.0009) + 69.184 / 86400.0)
     MEAN_SOLAR_TIME = DAYS_SINCE_EPOCH + 0.0009 - LONGITUDE / 360
@@ -66,11 +66,11 @@ def _get_sun_time(dt:_TDateTime) -> tuple[_TDateTime, _TDateTime]:
     return sunrise, sunset
 
 
-#############
-TITHI_LIST = ["पुिन", "पार", "िदतीया", "तृतीया", "चतुथी", "पञमी", "षषी", "सपमी", "अषमी", "नवमी",
-              "दशमी", "एकादशी", "दादशी", "तयोदशी", "चतुदरशी", "आमै"]
+TITHI_LIST = ["पुिन", "पार", "िदतीया", "तृतीया", "चतुथी", "पञमी", "षषी", "सपमी", 
+              "अषमी", "नवमी", "दशमी", "एकादशी", "दादशी", "तयोदशी", "चतुदरशी", "आमै"]
 
-NS_MONTHS = ["कछला","िथंला","पोहेला","सिल्ला","चिल्ला","चौला","बछला","तछला","िदला","गुंला","ञला","कौला"]
+NS_MONTHS = ["कछला","िथंला","पोहेला","सिल्ला","चिल्ला","चौला","बछला","तछला",
+             "िदला","गुंला","ञला", "कौला"]
 
 from skyfield.api import load
 from skyfield.framelib import ecliptic_frame
@@ -78,16 +78,12 @@ from skyfield.framelib import ecliptic_frame
 
 def _get_tithi(dt:datetime.datetime):
     ts = load.timescale()
-    # t = ts.utc(int(dt.year), int(dt.month), int(dt.day), int(dt.hour), int(dt.minute), int(dt.second))
     t = ts.from_datetime(dt)
-
     eph = load("de421.bsp")
     sun, moon, earth = eph["sun"], eph["moon"], eph["earth"]
-
     e = earth.at(t)
     s = e.observe(sun).apparent()
     m = e.observe(moon).apparent()
-
     _, slon, _ = s.frame_latlon(ecliptic_frame)
     _, mlon, _ = m.frame_latlon(ecliptic_frame)
     phase = (mlon.degrees - slon.degrees) % 360.0
@@ -100,7 +96,6 @@ def _get_month(dt: _TDateTime):
     eph = load('de421.bsp')
     astrometric = eph['Earth'].at(t).observe(eph['Sun'])
     _, lon, _ = astrometric.frame_latlon(ecliptic_frame)
-    print(lon.degrees, lon.degrees / 30)
     return round(lon.degrees / 30) - 8
 
 
@@ -108,24 +103,19 @@ def _get_year(dt: _TDateTime, month):
     DAYS_SINCE_KALIYUG = ts2j(dt.timestamp()) - 588465.5
     KALI_YEAR = math.floor((DAYS_SINCE_KALIYUG + (10 - math.floor(month + 8)) * 30) / 365.25636)
     SAKA_YEAR = KALI_YEAR - 3179
-    NS_YEAR = SAKA_YEAR - 801 # 2 is corrected value
-    print(NS_YEAR, "YEAR")
-    
+    NS_YEAR = SAKA_YEAR - 801
+    print(NS_YEAR, end="\t")
+
 
 def get_nepal_sambat(dt:_TDateTime):
     SUNRISE, _ = _get_sun_time(dt)
-    _JD = ts2j(dt.timestamp())
-    _date = SUNRISE
-    _date = tz.localize(_date)
+    _date = tz.localize(SUNRISE)
     print(_date.strftime("%Y/%m/%d"), end="\t")
     gatech.date = ephem.previous_new_moon(_date)
     pnmd = ephem.previous_new_moon(_date).datetime()
     month = _get_month(tz.localize(pnmd))
     tithi_today =  _get_tithi(dt)
-    print("TITHI", tithi_today, end="\t")
     tithi_today = round(tithi_today)
-    # tithi_yesterday = _get_tithi((dt - datetime.timedelta(days=1)))
-    # tithi_yesterday = math.ceil(tithi_yesterday)
     PAKSHYA = 1 if tithi_today <= 15 else 2
     PAKSHYA_DEV = "थ्व" if PAKSHYA == 1 else "गा"
     print(NS_MONTHS[month] + PAKSHYA_DEV,  end=", ")
@@ -136,19 +126,12 @@ def get_nepal_sambat(dt:_TDateTime):
     if tithi_today in [15, 0]:
         tithi_today = 0 if PAKSHYA == 1 else 15
 
-    print(TITHI_LIST[tithi_today] + "\t" + str(tithi_today), end="\t")
-
-    # if round(tithi_today) == round(tithi_yesterday):
-    #     print("\tT: ", 8, end="\t")
-    # elif round(tithi_today) - round(tithi_yesterday) == 2:
-    #     print("\tT: ", 9, end="\t")
-    # else:
-    #     print("\tT: ", 0, end="\t")
+    print(TITHI_LIST[tithi_today] + f" ({tithi_today})", end="\t")
     _get_year(dt, month)
 
 if __name__ == "__main__":
     err = 'error: required YYYY-MM-DD date format'
-    parser = argparse.ArgumentParser(description='Optional app description')
+    parser = argparse.ArgumentParser()
     parser.add_argument('pos_arg', type=str, help=err)
     args = parser.parse_args()
     if not args:
