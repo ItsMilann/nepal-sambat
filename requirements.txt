@@ -1,0 +1,2 @@
+pyphen==0.14.0
+skyfield==1.47
